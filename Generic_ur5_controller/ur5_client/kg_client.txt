@@ -1,0 +1,212 @@
+ Program
+   BeforeStart
+     var_1≔ False 
+     thread_flag≔ False 
+     var_10≔[0,0,0,0,0,0,0,0,0,0]
+     Set
+   Robot Program
+     Loop var_1==False
+       var_1≔socket_open("192.168.1.5",30010)
+       Wait: 0.5
+     Loop var_1== True 
+       Wait: 0.001
+       var_2≔socket_read_ascii_float(12)
+       Loop var_2[0]≠12
+         var_2≔socket_read_ascii_float(12)
+       Switch var_2[1]
+         Case 0
+           'movejl'
+           var_3≔p[var_2[2],var_2[3],var_2[4],var_2[5],var_2[6],var_2[7]]
+           movej(var_3,var_2[8],var_2[9],var_2[10],var_2[11])
+           If var_2[12]==0
+             socket_send_string("completed_pose_move")
+         Case 1
+           'movej'
+           var_6≔[var_2[2],var_2[3],var_2[4],var_2[5],var_2[6],var_2[7]]
+           movej(var_6,var_2[8],var_2[9],var_2[10],var_2[11])
+           If var_2[12]==0
+             socket_send_string("completed_joint_move")
+         Case 2
+           'movel'
+           var_3≔p[var_2[2],var_2[3],var_2[4],var_2[5],var_2[6],var_2[7]]
+           movel(var_3,var_2[8],var_2[9],var_2[10],var_2[11])
+           If var_2[12]==0
+             socket_send_string("completed_linear_move")
+         Case 3
+           'move to var_3 relative to current pose'
+           var_3≔p[var_2[2],var_2[3],var_2[4],var_2[5],var_2[6],var_2[7]]
+           var_5≔get_actual_tcp_pose()
+           movel(pose_trans(var_5,var_3),var_2[8],var_2[9],var_2[10],var_2[11])
+           If var_2[12]==0
+             socket_send_string("completed_relative_linear_move")
+         Case 4
+           'force move in single axis'
+           var_5≔get_actual_tcp_pose()
+           If var_2[2]≠0
+             var_5[0]=var_5[0]+var_2[2]
+             axis≔0
+           ElseIf var_2[3]≠0
+             var_5[1]=var_5[1]+var_2[3]
+             axis≔1
+           ElseIf var_2[4]≠0
+             var_5[2]=var_5[2]+var_2[4]
+             axis≔2
+           thread_flag= True 
+           Loop thread_flag== True 
+             movel(var_5,var_2[8],var_2[9],0,0)
+             Wait: 0.01
+             thread_flag= False 
+           stopl(10)
+           If var_2[12]==0
+             socket_send_string("completed_force_move")
+         Case 5
+           'servoj'
+           var_3≔p[var_2[2],var_2[3],var_2[4],var_2[5],var_2[6],var_2[7]]
+           If var_2[12]==0
+             stopl(0.5)
+           Else
+             var_14≔get_inverse_kin(var_3)
+             servoj(var_14,t=var_2[9],lookahead_time=var_2[10],gain=var_2[11])
+           If var_2[12]==0
+             socket_send_string("completed_servoj_move")
+         Case 6
+           'speedl'
+           var_6≔[var_2[2],var_2[3],var_2[4],var_2[5],var_2[6],var_2[7]]
+           If var_2[10]==0
+             speedl(var_6,var_2[8])
+           Else
+             speedl(var_6,var_2[8],var_2[10])
+           socket_send_string("completed_speedl")
+         Case 7
+           'speedj'
+           var_6≔[var_2[2],var_2[3],var_2[4],var_2[5],var_2[6],var_2[7]]
+           If var_2[10]==0
+             speedj(var_6,var_2[8])
+           Else
+             speedj(var_6,var_2[8],var_2[10])
+           socket_send_string("completed_speedj")
+         Case 8
+           'stopl'
+           stopl(var_2[8])
+           socket_send_string("completed_stopl")
+         Case 9
+           'servoc'
+           var_3≔p[var_2[2],var_2[3],var_2[4],var_2[5],var_2[6],var_2[7]]
+           If var_2[12]==0
+             stopl(var_2[8])
+           Else
+             servoc(var_3,a=var_2[8],v=var_2[9],r=var_2[11])
+           If var_2[12]==0
+             socket_send_string("completed_servoc_move")
+         Case 10
+           'return current pose'
+           var_5≔get_actual_tcp_pose()
+           socket_send_string(var_5)
+         Case 11
+           'return current joints'
+           var_4≔get_actual_joint_positions()
+           socket_send_string(var_4)
+         Case 12
+           'return inverse kin of pose'
+           var_3≔p[var_2[2],var_2[3],var_2[4],var_2[5],var_2[6],var_2[7]]
+           socket_send_string(get_inverse_kin(var_3))
+         Case 13
+           'return translation to get to 2nd pose from 1st pose coord system'
+           var_3≔p[var_2[2],var_2[3],var_2[4],var_2[5],var_2[6],var_2[7]]
+           var_5≔get_actual_tcp_pose()
+           socket_send_string(pose_trans(var_5,var_3))
+         Case 14
+           'return current forces'
+           socket_send_string(get_tcp_force())
+         Case 15
+           'return force magnitude'
+           socket_send_string(force())
+         Case 16
+           'return tool velocity'
+           socket_send_string(get_actual_tcp_speed())
+         Case 17
+           'return force magnitude'
+           socket_send_string(get_actual_joint_speeds())
+         Case 20
+           'set tcp'
+           var_3≔p[var_2[2],var_2[3],var_2[4],var_2[5],var_2[6],var_2[7]]
+           set_tcp(var_3)
+           If var_2[12]==0
+             socket_send_string("tcp_updated")
+         Case 21
+           'set payload'
+           set_payload(var_2[8],[var_2[2],var_2[3],var_2[4]])
+           If var_2[12]==0
+             socket_send_string("payload_updated")
+         Case 22
+           'set digital out'
+           If var_2[9]==1
+             set_configurable_digital_out(var_2[8], True )
+           Else
+             set_configurable_digital_out(var_2[8], False )
+           If var_2[12]==0
+             socket_send_string("digital output set")
+         Case 30
+           freedrive_mode()
+           socket_send_string("begin_freedrive_mode")
+         Case 31
+           end_freedrive_mode()
+           socket_send_string("end_freedrive_mode")
+         Case 32
+           socket_send_string("begin_blend_move")
+           var_13≔var_2[8]
+           n≔0
+           Loop n<var_13
+             n=n+1
+             Loop var_2[0]≠12
+               var_2≔socket_read_ascii_float(12)
+             var_3≔p[var_2[2],var_2[3],var_2[4],var_2[5],var_2[6],var_2[7]]
+             var_10[n] = var_3
+           movel(var_10[0],0.1,0.5,0,0)
+           n≔0
+           Loop n<var_13
+             n=n+1
+             movep(var_10[n])
+         Case 33
+           socket_send_string("begin_blend_move")
+         Case 40
+           socket_send_string("robot_ready")
+         Case 100
+           'reset program'
+           If var_2[12]==0
+             socket_send_string("resetting...")
+           socket_close()
+           var_1≔ False 
+         Case 101
+           socket_send_string("ready")
+         Case 400
+           'safe move'
+           var_3≔p[var_2[2],var_2[3],var_2[4],var_2[5],var_2[6],var_2[7]]
+           var_5≔get_actual_tcp_pose()
+           var_7≔get_inverse_kin(var_3)
+           var_8≔get_inverse_kin(var_5)
+           var_9≔0
+           Loop 6 times
+             If (var_7[Loop_5]-var_8[Loop_5])>2.0  or  (var_8[Loop_5]-var_7[Loop_5])>2.0
+               var_9=1
+               'break'
+           If var_9==0
+             movej(var_3,1,var_2[8],0,0)
+             socket_send_string("completed_pose_move")
+           Else
+             socket_send_string("no_safe_move_found")
+       'Wait: 20.0'
+   Thread_1
+     Loop thread_flag== False 
+       var_12=0
+       Wait: 0.01
+     Wait: 0.001
+     var_11≔get_tcp_force()
+     If var_11[axis]*var_11[axis]<var_2[11]*var_2[11]
+       var_12=0
+     Else
+       var_12=var_12+1
+       If var_12>0
+         thread_flag= False 
+         'stopl(1)'
+         'speedl([0,0,0,0,0,0],1,0)'
