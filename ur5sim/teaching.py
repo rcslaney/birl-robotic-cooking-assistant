@@ -102,8 +102,7 @@ def play(name):
     print("actual end_pos:", robot.get_state()["actual_TCP_pose"])
 
 
-
-record("testRecording1724", offset=[0.04621531, -0.61842636, 0.03179589, 0, 0, 0])
+record("arm_trajectory_" + str(round(time.time())))
 #input("Ready to play?")
 #play("testRecording2")
 

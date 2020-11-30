@@ -1,20 +1,81 @@
+import time
 import traceback
 import numpy as np
 import cv2
 import tkinter as tk
 from PIL import Image, ImageTk
 import os
-from dt_apriltags import Detector
+from dt_apriltags import Detector, Detection
 from robot_utils import UR5SimSync
 from robot_utils import p
+from matplotlib import pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+import json
 
-#robot = UR5SimSync(robot_ip="192.168.1.6")
-#p.configureDebugVisualizer(p.COV_ENABLE_GUI,0)
+
+class CustomDetection:
+    def __init__(self, detection):
+        self.age = 0
+        self.detection = detection
+
+    def __getattr__(self, item):
+        return getattr(self.detection, item)
+
+    def tick(self):
+        self.age += 1
+
+    def is_new(self):
+        return self.age == 0
+
+
+def set_axes_equal(ax):
+    '''Make axes of 3D plot have equal scale so that spheres appear as spheres,
+    cubes as cubes, etc..  This is one possible solution to Matplotlib's
+    ax.set_aspect('equal') and ax.axis('equal') not working for 3D.
+
+    Input
+      ax: a matplotlib axis, e.g., as output from plt.gca().
+    '''
+
+    x_limits = ax.get_xlim3d()
+    y_limits = ax.get_ylim3d()
+    z_limits = ax.get_zlim3d()
+
+    x_range = abs(x_limits[1] - x_limits[0])
+    x_middle = np.mean(x_limits)
+    y_range = abs(y_limits[1] - y_limits[0])
+    y_middle = np.mean(y_limits)
+    z_range = abs(z_limits[1] - z_limits[0])
+    z_middle = np.mean(z_limits)
+
+    # The plot bounding box is a sphere in the sense of the infinity
+    # norm, hence I call half the max range the plot radius.
+    plot_radius = 0.5*max([x_range, y_range, z_range])
+
+    ax.set_xlim3d([x_middle - plot_radius, x_middle + plot_radius])
+    ax.set_ylim3d([y_middle - plot_radius, y_middle + plot_radius])
+    ax.set_zlim3d([z_middle - plot_radius, z_middle + plot_radius])
 
 
 def snapshot():
     global master_tag, translations, transforms
     #robot.get_state()
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+
+    json.dump(trajectories, open("trajectory_recording_" + str(round(time.time())) + ".json", "w"))
+
+    # print(whisk_trajectory)
+    #
+    # xs = [p[0][0] for p in whisk_trajectory]
+    # ys = [p[1][0] for p in whisk_trajectory]
+    # zs = [p[2][0] for p in whisk_trajectory]
+    #
+    # ax.plot(xs, ys, zs)
+    # set_axes_equal(ax)
+    # plt.show()
+
     for i in translations.keys():
         for j in translations[i].keys():
             if translations[i] is None or translations[i][j] is None:
@@ -48,57 +109,23 @@ def set_camera_parameter(key, value, device):
         raise Exception(op)
 
 
-# Set up GUI
-window = tk.Tk()  # Makes main window
-window.wm_title("Tracking")
-window.config()
-
-# Graphics window
-imageFrame = tk.Frame(window, width=600, height=500)
-imageFrame.grid(row=0, column=0, padx=10, pady=2)
-
-# Capture video frames
-lmain = tk.Label(imageFrame)
-lmain.grid(row=0, column=0)
-cap = cv2.VideoCapture(0, cv2.CAP_V4L)
-
-# Set up detector
-at_detector = Detector(searchpath=['apriltags'],
-                           families='tag36h11',
-                           nthreads=4,
-                           quad_decimate=1.0,
-                           quad_sigma=0.0,
-                           refine_edges=1,
-                           decode_sharpening=0.25,
-                           debug=0)
-
-detections = [None] * 100
-
-transforms = {}
-translations = {}
-
-c270_params = [1402, 1402, 642, 470] # Probably at odd resolution
-brio_params = [499.0239, 499.1960, 310.1258, 232.4641] # At 640x480
-
-tag_size_overrides = {
-    0: 0.092
-}
-
-master_tag = 14
-
-whisk_tags = [11, 14, 10, 12, 13]
-
-
-def update_detection_data(curr_detections):
+def update_detection_data(curr_detections, detections):
     """ Takes current detections and adds them to global 'detections' adding an age parameter """
-    global detections
 
-    for i in range(len(detections)):
-        if detections[i] is not None:
-            detections[i]["age"] += 1
+    for d in detections.values():
+        d.tick()
 
-    for i in range(len(curr_detections)):
-        detections[curr_detections[i].tag_id] = {"obj": curr_detections[i], "age": 0}
+    for d in curr_detections:
+        detections[d.tag_id] = CustomDetection(d)
+
+    return detections
+
+
+def draw_outlines(detections, frame, max_age=0):
+    for d in filter(lambda t: t.age <= max_age, detections.values()):
+        frame = draw_poly(d.corners, frame)
+
+    return frame
 
 
 def draw_poly(corners, frame):
@@ -106,6 +133,25 @@ def draw_poly(corners, frame):
     for i in range(0, 4):
         frame = cv2.line(frame, (round(corners[i][0]), round(corners[i][1])), (round(corners[(i + 1) % 4][0]), round(corners[(i + 1) % 4][1])), (255, 0, 0), 8)
     return frame
+
+
+def draw_debug_text(detections, frame, max_age=0):
+    for y, d in enumerate(filter(lambda t: t.age <= max_age, detections.values())):
+        cv2.putText(frame, str(d.tag_id), (10, 30 + y * 27), cv2.FONT_HERSHEY_COMPLEX, 0.75, (0, 0, 255))
+
+    return frame
+
+
+def extract_all_transforms(detections):
+    global master_tags
+    for master_tag_id in master_tags:
+        if master_tag_id not in detections:
+            continue
+
+        master_tag = detections[master_tag_id]
+        for secondary_tag in detections.values():
+            if master_tag.tag_id != secondary_tag.tag_id and secondary_tag.tag_id not in master_tags:
+                extract_transform(master_tag, secondary_tag)
 
 
 def extract_transform(master_d, secondary_d):
@@ -145,58 +191,69 @@ def show_frame():
 
         gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-        curr_detections = at_detector.detect(gray_frame, estimate_tag_pose=True, camera_params=brio_params, tag_size=0.032, tag_size_overrides=tag_size_overrides)
+        detections = update_detection_data(at_detector.detect(gray_frame, estimate_tag_pose=True, camera_params=brio_params, tag_size=0.032, tag_size_overrides=tag_size_overrides), detections)
 
-        update_detection_data(curr_detections)
+        if learning_mode.get():
+            extract_all_transforms(detections)
 
-        whisk_detections = []
+        frame = draw_outlines(detections, frame)
 
-        y = 0
-        for d in detections:
-            if d is None or d["age"] > 0:
-                continue
+        frame = draw_debug_text(detections, frame)
 
-            frame = draw_poly(d["obj"].corners, frame)
+        tmp_t = {}
+        for i in master_tags:
+            tmp_t[i] = []
 
-            frame = cv2.putText(frame, str(d["obj"].tag_id), (10, 30 + y * 27), cv2.FONT_HERSHEY_COMPLEX, 0.75, (0, 0, 255))
-            y += 1
+        for d in detections.values():
+            t = extract_world_coordinates(detections[0], d)
+            if d.tag_id in master_tags:
+                tmp_t[d.tag_id].append(t)
+            else:
+                for k, v in secondary_tags.items():
+                    if d.tag_id in v:
+                        tmp_t[k].append(t)
+                        break
 
-            #if d["obj"].tag_id == 4:
-            #    continue
+        for k, v in tmp_t.items():
+            if len(v) > 0:
+                trajectories[k].append([time.time(), list(np.average(v, axis=0).flatten())])
+            else:
+                trajectories[k].append([time.time(), None])
 
-            if detections[master_tag] is not None and detections[master_tag]["age"] == 0:
-                extract_transform(detections[master_tag]["obj"], d["obj"])
+        #print(tmp_t)
 
-            if d["obj"].tag_id in whisk_tags:
-                whisk_detections.append(d["obj"])
 
-            if d["obj"].tag_id != 0:
-                point_a = d["obj"].pose_t - d["obj"].pose_R @ np.array([[0], [0], [-0.02]]) - detections[0]["obj"].pose_t
-                try:
-                    point_b = d["obj"].pose_t - d["obj"].pose_R @ np.array([[0], [0], [-0.02]]) - (d["obj"].pose_R @ np.linalg.inv(np.average(transforms[master_tag][d["obj"].tag_id], axis=0))) @ np.array([[0], [0], [-0.3]]) - detections[0]["obj"].pose_t
+        # for d in detections.values():
+        #     #if d.tag_id == 4:
+        #     #    continue
+        #
+        #     if d.tag_id != 0:
+        #         point_a = d.pose_t - d.pose_R @ np.array([[0], [0], [-0.02]]) - detections[0].pose_t
+        #         try:
+        #             point_b = d.pose_t - d.pose_R @ np.array([[0], [0], [-0.02]]) - (d.pose_R @ np.linalg.inv(np.average(transforms[master_tag][d.tag_id], axis=0))) @ np.array([[0], [0], [-0.3]]) - detections[0].pose_t
+        #
+        #             point_a = np.linalg.inv(detections[0].pose_R) @ point_a
+        #             point_b = np.linalg.inv(detections[0].pose_R) @ point_b
+        #
+        #             point_a[2][0] *= -1
+        #             point_b[2][0] *= -1
+        #
+        #             point_a[1][0] *= -1
+        #             point_b[1][0] *= -1
+        #
+        #             # p.addUserDebugLine(point_a.flatten(), point_b.flatten(), [1, 0, 0], lineWidth=3)
+        #         except Exception as e:
+        #             print("error", e)
 
-                    point_a = np.linalg.inv(detections[0]["obj"].pose_R) @ point_a
-                    point_b = np.linalg.inv(detections[0]["obj"].pose_R) @ point_b
-
-                    point_a[2][0] *= -1
-                    point_b[2][0] *= -1
-
-                    point_a[1][0] *= -1
-                    point_b[1][0] *= -1
-
-                    # p.addUserDebugLine(point_a.flatten(), point_b.flatten(), [1, 0, 0], lineWidth=3)
-                except Exception as e:
-                    print("error", e)
-
-        whisk_translation = np.array([[0.0], [0.0], [0.0]])
-        for d in whisk_detections:
-            whisk_translation += extract_world_coordinates(detections[0]["obj"], d)
-
-        whisk_translation /= len(whisk_detections)
-
-        whisk_translation[0][0] += 0.27
-
-        print(whisk_translation)
+        # whisk_translation = np.array([[0.0], [0.0], [0.0]])
+        # for d in whisk_detections:
+        #     whisk_translation += extract_world_coordinates(detections[0], d)
+        #
+        # whisk_translation /= len(whisk_detections)
+        #
+        # whisk_translation[0][0] += 0.27
+        #
+        # print(whisk_translation)
 
         cv2image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA)
 
@@ -231,6 +288,54 @@ def set_good_parameters():
 
     print_properties()
 
+
+#robot = UR5SimSync(robot_ip="192.168.1.6")
+#p.configureDebugVisualizer(p.COV_ENABLE_GUI,0)
+
+trajectories = {14: [], 36: []}
+
+# Set up GUI
+window = tk.Tk()  # Makes main window
+window.wm_title("Tracking")
+window.config()
+
+# Graphics window
+imageFrame = tk.Frame(window, width=600, height=500)
+imageFrame.grid(row=0, column=0, padx=10, pady=2)
+
+# Capture video frames
+lmain = tk.Label(imageFrame)
+lmain.grid(row=0, column=0)
+cap = cv2.VideoCapture(0, cv2.CAP_V4L)
+
+# Set up detector
+at_detector = Detector(searchpath=['apriltags'],
+                       families='tag36h11',
+                       nthreads=4,
+                       quad_decimate=1.0,
+                       quad_sigma=0.0,
+                       refine_edges=1,
+                       decode_sharpening=0.25,
+                       debug=0)
+
+detections = {}
+
+transforms = {}
+translations = {}
+
+c270_params = [1402, 1402, 642, 470]  # Probably at odd resolution
+brio_params = [499.0239, 499.1960, 310.1258, 232.4641]  # At 640x480
+
+tag_size_overrides = {
+    0: 0.092
+}
+
+master_tags = [14, 36]
+
+secondary_tags = {
+    14: [10, 11, 12, 13],
+    36: []
+}
 
 # Slider window (slider controls stage position)
 sliderFrame = tk.Frame(window, width=900, height=100)
@@ -270,6 +375,10 @@ cb.pack()
 exposure = tk.IntVar()
 s = tk.Scale(sliderFrame, from_=0, to=1000, tickinterval=100, orient=tk.HORIZONTAL, label="Exposure", command=lambda e: set_camera_parameter("exposure_absolute", s.get(), cameras[camera.get()]))
 s.pack(expand=True, fill="x")
+
+learning_mode = tk.IntVar()
+lm_cb = tk.Checkbutton(sliderFrame, text="Learning mode", variable=learning_mode)
+lm_cb.pack()
 
 show_frame()
 window.mainloop()
