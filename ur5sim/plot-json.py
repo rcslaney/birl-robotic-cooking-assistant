@@ -4,7 +4,7 @@ from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 import matplotlib.pyplot as plt
 
-poses = json.load(open("testRecording1559.json"))
+poses = json.load(open("records/20201221-164924/arm_trajectory.json"))
 
 fig = plt.figure()
 ax = fig.gca()

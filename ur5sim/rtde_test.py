@@ -18,12 +18,12 @@ lookahead_time = 0.2
 gain = 200
 joint_q = [-1.54, -1.4, -2.28, -0.59, 1.60, 0.023]
 
-sequence = json.load(open("testRecording1559.json"))
+sequence = json.load(open("records/20201217-171704/arm_trajectory.json"))
 
 input("Play?")
 
-offset = [0.25493689, -0.56119273, -0.02703432, 0, 0, 0]
-
+#offset = [0.25493689, -0.56119273, -0.02703432, 0, 0, 0]
+offset = [0, 0, 0, 0, 0, 0]
 # Move to initial joint position with a regular moveJ
 rtde_c.moveL(np.add(offset, sequence[0][0]).tolist())
 print("moved?")

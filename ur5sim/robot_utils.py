@@ -123,11 +123,11 @@ class UR5:
         self.ur5_control = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.ur5_control.settimeout(10)
         self.ur5_control.connect((self.host, self.control_port_number))
-        time.sleep(1.00)
-        self.ur5_control.send(b"set_digital_out(2, True)" + b"\n")
-        time.sleep(.1)
-        self.ur5_control.send(b"set_digital_out(7, True)" + b"\n")
-        time.sleep(1.00)
+        #time.sleep(1.00)
+        #self.ur5_control.send(b"set_digital_out(2, True)" + b"\n")
+        #time.sleep(.1)
+        #self.ur5_control.send(b"set_digital_out(7, True)" + b"\n")
+        #time.sleep(1.00)
         print("CONTROL CONNECTION TO UR5 ESTABLISHED...")
 
         # s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -142,7 +142,7 @@ class UR5:
         self.dashboard = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.dashboard.settimeout(10)
         self.dashboard.connect((self.host, 29999))
-        time.sleep(1.00)
+        #time.sleep(1.00)
         print("UR5 DASHBOARD SERVER CONNECTION ESTABLISHED...")
         self.dashboard.send(encode("unlock protective stop\n"))
         print("protective stop unlocked")
@@ -243,7 +243,7 @@ class UR5:
                                      str(speed_to_reach[4]) + ", " +
                                      str(speed_to_reach[5]) + "], " +
                                      "a=" + str(acc) +
-                                     (", " + "t=" + str(t) if t != 0 else '') +
+                                     (", " + "t=" + str(t)) +
                                      (", " + "aRot=" + str(tool_acceleration) if tool_acceleration != 0 else '') + ")" +
                                      "\n"))
         return True
@@ -263,11 +263,14 @@ class UR5:
                               (", " + "r=" + str(bland_radius) if bland_radius != 0 else '') + ")" + "\n"))
         return True
 
-    def freedrive(self):
-        self.ur5_control.send(encode("teach_mode()\n"))
-
-    def test(self):
-        self.ur5_control.send(encode("potato()\n"))
+    def freedrive(self, enable, timeout=120):
+        if enable:
+            self.ur5_control.send(encode("def myProg():\n\tfreedrive_mode()\n\tsleep({})\nend".format(timeout)))
+            print("Freedrive start!")
+        else:
+            self.ur5_control.send(encode("def myProg():\n\tend_freedrive_mode()\nend"))
+        self.dashboard.send(b"robotmode\n")
+        print(self.dashboard.recv(1024))
 
     def servoj(self, pose, acc=1.4, vel=.8, t=0, bland_radius=0):
         j0, j1, j2, j3, j4, j5 = pose
@@ -284,7 +287,7 @@ class UR5:
                               (", " + "r=" + str(bland_radius) if bland_radius != 0 else '') + ")" + "\n"))
         return True
 
-    def servoj_cart(self, pose, acc=0, vel=0, t=.1, lookhead_time=0.3, gain=100):
+    def servoj_cart(self, pose, acc=0.25, vel=0.25, t=.1, lookhead_time=0.2, gain=200):
         x, y, z, rx, ry, rz = pose
         self.ur5_control.send(encode(
             "servoj(get_inverse_kin(p[{}, {}, {}, {}, {}, {}]), a={}, v={}, t={}, lookahead_time={}, gain={})\n"

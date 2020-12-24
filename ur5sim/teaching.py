@@ -84,8 +84,8 @@ def record(name, offset=(0, 0, 0, 0, 0, 0)):
     open(name, "w").write(json.dumps(sequence))
 
 
-def play(name):
-    sequence = json.load(open(name + ".json"))
+def play(filename):
+    sequence = json.load(open(filename))
     print(len(sequence))
     print("average timestep: ", sequence[-1][1] / (len(sequence) - 2))
     robot.lin_go_to(sequence[0][0])
@@ -102,9 +102,9 @@ def play(name):
     print("actual end_pos:", robot.get_state()["actual_TCP_pose"])
 
 
-record("arm_trajectory_" + str(round(time.time())))
+#record("arm_trajectory_" + str(round(time.time())))
 #input("Ready to play?")
-#play("testRecording2")
+play("records/20201217-171704/arm_trajectory.json")
 
 # [-0.307212, -0.388019, 0.290724, -1.22996, -1.0794, 1.00604] Kierans
 # [-0.3072148632635549, -0.38798823416280576, 0.2907236202218176, -1.2298626399827235, -1.0794722257721994, 1.0058524346469067]
