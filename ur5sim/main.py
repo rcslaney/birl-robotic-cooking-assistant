@@ -128,6 +128,47 @@ def create_sphere():
     return sphereId
 
 
+def create_box(half_extents, position):
+    visualShapeId = p.createVisualShape(shapeType=p.GEOM_BOX,
+                                        halfExtents=half_extents,
+                                        rgbaColor=[0.7, 0.7, 0.7, 1],
+                                        visualFramePosition=[0, 0, 0])
+
+    collisionShapeId = p.createCollisionShape(shapeType=p.GEOM_BOX,
+                                        halfExtents=half_extents,
+                                        collisionFramePosition=[0, 0, 0])
+
+    boxId = p.createMultiBody(baseMass=0,
+                      baseInertialFramePosition=[0, 0, 0],
+                      baseVisualShapeIndex=visualShapeId,
+                      baseCollisionShapeIndex=collisionShapeId,
+                      basePosition=position)
+
+    return boxId
+
+
+def create_object(filename, position):
+    visualShapeId = p.createVisualShape(shapeType=p.GEOM_MESH,
+                                        fileName=filename,
+                                        rgbaColor=[0.7, 0.7, 0.7, 1],
+                                        visualFramePosition=[0, 0, 0],
+                                        meshScale=[1/1000, 1/1000, 1/1000])
+
+    collisionShapeId = p.createCollisionShape(shapeType=p.GEOM_MESH,
+                                        fileName=filename,
+                                        halfExtents=filename,
+                                        collisionFramePosition=[0, 0, 0],
+                                        meshScale=[1/1000, 1/1000, 1/1000])
+
+    objectId = p.createMultiBody(baseMass=0.2,
+                      baseInertialFramePosition=[0, 0, 0],
+                      baseVisualShapeIndex=visualShapeId,
+                      baseCollisionShapeIndex=collisionShapeId,
+                      basePosition=position)
+
+    return objectId
+
+
 def update_camera_list():
     cameras = get_cameras()
 
@@ -584,6 +625,12 @@ def connect_robot():
     robot = UR5SimSync(ip, use_rt=True)
     p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
 
+    # Create world
+    create_box([0.3, 0.3, 0.5], [0, 0.15, 0.5])
+    create_box([1.2, 0.3, 0.5], [0, -0.55, 0.5])
+    create_box([1.2, 0.025, 0.7], [0, -0.85, 0.7])
+    create_object("whisk.obj", [0, -0.55, 1.1])
+
     state_update_thread = threading.Thread(target=update_robot_state)
     state_update_thread.start()
 
@@ -617,7 +664,7 @@ def run_command(e):
 
 
 robot = None
-ip = "192.168.1.6"
+ip = "192.168.65.129"
 capturing = True
 last_error = ""
 recording = False
@@ -627,7 +674,7 @@ new_frame = False
 
 spheres = {}
 
-gripper = Gripper(2, 1, virtual=False)
+gripper = Gripper(2, 1, virtual=True)
 gripper.activate()
 
 vid_cap_thread = threading.Thread(target=vid_cap_thread_func, args=(0,))

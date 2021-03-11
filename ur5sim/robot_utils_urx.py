@@ -14,7 +14,7 @@ from urx import Robot
 
 
 class UR5SimSync(Robot):
-    def __init__(self, ip, robot_urdf_path="./urdf/ur5.urdf", server_mode=p.GUI, robot_start_pos=(0, 0, 0), verbose=True, *args, **kwargs):
+    def __init__(self, ip, robot_urdf_path="./urdf/ur5.urdf", server_mode=p.GUI, robot_start_pos=(0, 0, 1), verbose=True, *args, **kwargs):
         self.state = None
         self.freedrive = False
 
